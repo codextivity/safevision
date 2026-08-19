@@ -1,11 +1,8 @@
 # 🦺 SafeVision — PPE Compliance Intelligence System
 
-AI-powered construction site safety monitoring that combines
-YOLOv11 object detection with GPT-4o vision verification and
-a LangChain agent for natural language safety queries.
+AI-powered construction site safety monitoring that combines YOLOv11 object detection with GPT-4o vision verification and a LangChain agent for natural language safety queries.
 
-**Live Demo:** https://safevision.onrender.com/docs
-**GitHub:** https://github.com/codextivity/safevision
+**Live Demo:** https://safevision-7fbs.onrender.com/docs
 
 ---
 
@@ -20,6 +17,7 @@ GET  /violations/summary → aggregate compliance statistics
 ```
 
 Ask questions in natural language:
+
 ```
 "What is our compliance rate today?"
 "Which violation type is most common?"
@@ -74,26 +72,11 @@ Construction Site Image
 
 ## Key Engineering Decisions
 
-**Why YOLO + GPT-4o instead of GPT-4o alone?**
-YOLO processes images in 4ms at no API cost.
-GPT-4o takes 2-3 seconds and costs per call.
-The tiered system uses YOLO for all frames and GPT-4o
-only for uncertain detections (typically 5-15% of cases).
-This reduces cost by 85-95% while maintaining accuracy.
+**Why YOLO + GPT-4o instead of GPT-4o alone**?YOLO processes images in 4ms at no API cost. GPT-4o takes 2-3 seconds and costs per call. The tiered system uses YOLO for all frames and GPT-4o only for uncertain detections (typically 5-15% of cases). This reduces cost by 85-95% while maintaining accuracy.
 
-**Why spatial association instead of direct violation classification?**
-Training a binary compliant/non-compliant classifier requires
-worker-level labels that most datasets lack. Spatial association
-pairs person detections with nearby PPE detections — making
-the compliance logic configurable in code rather than baked
-into the model. PPE requirements can be changed per site
-without retraining.
+**Why spatial association instead of direct violation classification**?Training a binary compliant/non-compliant classifier requires worker-level labels that most datasets lack. Spatial association pairs person detections with nearby PPE detections — making the compliance logic configurable in code rather than baked into the model. PPE requirements can be changed per site without retraining.
 
-**Why LangChain agent over a fixed dashboard?**
-Fixed dashboards answer predefined questions.
-The LangChain agent answers any question grounded in real
-detection data. Safety managers can ask domain-specific
-questions without waiting for a developer to add a new chart.
+**Why LangChain agent over a fixed dashboard**?Fixed dashboards answer predefined questions. The LangChain agent answers any question grounded in real detection data. Safety managers can ask domain-specific questions without waiting for a developer to add a new chart.
 
 ---
 
@@ -102,7 +85,7 @@ questions without waiting for a developer to add a new chart.
 Trained on 5646 construction site images — YOLOv11m, 50 epochs:
 
 | Class | mAP50 | Assessment |
-|---|---|---|
+| --- | --- | --- |
 | Safety Vest | 0.893 | ✅ Production ready |
 | Hardhat | 0.702 | ✅ Strong |
 | Person | 0.693 | ✅ Strong |
@@ -110,16 +93,14 @@ Trained on 5646 construction site images — YOLOv11m, 50 epochs:
 | NO-Hardhat | 0.121 | ⚠ GPT-4o verification |
 | **Overall** | **0.549** | **Demo ready** |
 
-Violation classes score lower due to class imbalance
-(9-14% of training instances). Low-confidence detections
-are automatically routed to GPT-4o vision for verification.
+Violation classes score lower due to class imbalance (9-14% of training instances). Low-confidence detections are automatically routed to GPT-4o vision for verification.
 
 ---
 
 ## Tech Stack
 
 | Component | Technology | Purpose |
-|---|---|---|
+| --- | --- | --- |
 | Object detection | YOLOv11m | PPE and person detection |
 | Vision verification | GPT-4o | Uncertain detection verification |
 | LLM framework | LangChain + LangGraph | Agent with 6 database tools |
@@ -148,7 +129,7 @@ Open http://localhost:8000/docs
 ## API Endpoints
 
 | Method | Endpoint | Description |
-|---|---|---|
+| --- | --- | --- |
 | GET | /health | Service status |
 | POST | /detect | Upload image for PPE analysis |
 | POST | /query | Natural language safety query |
@@ -186,33 +167,14 @@ safevision/
 
 ## Interview Talking Points
 
-**On the CV + LLM integration:**
-"The key insight was that CV models produce excellent detection
-data but poor user interfaces. Raw bounding boxes and confidence
-scores are meaningless to safety managers. The LangChain agent
-layer translates detection outputs into actionable insights —
-trend analysis, violation summaries, and recommendations —
-grounded in real database records."
+**On the CV + LLM integration:**"The key insight was that CV models produce excellent detection data but poor user interfaces. Raw bounding boxes and confidence scores are meaningless to safety managers. The LangChain agent layer translates detection outputs into actionable insights — trend analysis, violation summaries, and recommendations — grounded in real database records."
 
-**On the tiered verification approach:**
-"I analyzed the model's per-class performance and found that
-explicit violation class detection was weak (0.121 mAP50 on
-NO-Hardhat) due to class imbalance in the training data.
-Rather than accepting this limitation, I designed a tiered system
-where YOLO handles confident detections and GPT-4o verifies
-uncertain cases. This compensates for the model's weakness
-without requiring more training data."
+**On the tiered verification approach:**"I analyzed the model's per-class performance and found that explicit violation class detection was weak (0.121 mAP50 on NO-Hardhat) due to class imbalance in the training data. Rather than accepting this limitation, I designed a tiered system where YOLO handles confident detections and GPT-4o verifies uncertain cases. This compensates for the model's weakness without requiring more training data."
 
-**On spatial association:**
-"Instead of training a binary compliant/non-compliant classifier,
-I implemented a distance-based spatial association algorithm that
-pairs each person detection with nearby PPE detections. This means
-compliance rules are configurable in code rather than baked into
-the model — the same trained model works for any PPE policy."
+**On spatial association:**"Instead of training a binary compliant/non-compliant classifier, I implemented a distance-based spatial association algorithm that pairs each person detection with nearby PPE detections. This means compliance rules are configurable in code rather than baked into the model — the same trained model works for any PPE policy."
 
 ---
 
 ## Author
 
-Built by [Codextivity](https://github.com/codextivity)
-combining Computer Vision and LLM engineering expertise.
+Built by [Codextivity](https://github.com/codextivity)combining Computer Vision and LLM engineering expertise.
