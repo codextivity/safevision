@@ -25,6 +25,10 @@ async def lifespan(app: FastAPI):
     # Initialize SQLite database
     initialize_database()
 
+    onnx_path = Path("models/trained/best.onnx")
+    print(f"ONNX exists: {onnx_path.exists()}")
+    print(f"ONNX size: {onnx_path.stat().st_size if onnx_path.exists() else 'N/A'} bytes")
+
     # Load YOLO detector if model exists
     model_path = Path(settings.yolo_model_path)
     if model_path.exists():
