@@ -162,24 +162,23 @@ class PPEDetector:
     """
 
     def __init__(self, model_path: str = None):
-        """
-        Loads the trained YOLO model.
-
-        Args:
-            model_path: path to trained .pt file.
-                       Defaults to settings.yolo_model_path
-        """
+        from app.config import settings
         model_path = model_path or settings.yolo_model_path
 
-        if not Path(model_path).exists():
-            raise FileNotFoundError(
-                f"Trained model not found at {model_path}. "
-                f"Run train.py first."
-            )
+        # Use ONNX model on CPU for lower memory usage
+        if not torch.cuda.is_available():
+            onnx_path = model_path.replace(".pt", ".onnx")
+            if Path(onnx_path).exists():
+                print(f"Loading ONNX model (CPU deployment): {onnx_path}")
+                self.model = YOLO(onnx_path, task="detect")
+            else:
+                print(f"ONNX not found, loading PT model: {model_path}")
+                self.model = YOLO(model_path)
+        else:
+            self.model = YOLO(model_path)
 
-        print(f"Loading PPE detector from {model_path}...")
-        self.model = YOLO(model_path)
         self.class_names = settings.class_names
+        print(f"Detector ready on device: {DEVICE}")
         print(f"Detector ready. Classes: {self.class_names}")
 
     def detect(self, image_path: str) -> list[Detection]:
