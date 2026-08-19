@@ -8,7 +8,7 @@
 # 3. Spatial association — pairing each Person with nearby PPE
 # 4. Classifying each worker as compliant or violating
 # 5. Flagging uncertain detections for GPT-4o verification
-
+import torch
 from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Optional
@@ -19,6 +19,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from app.config import settings
+DEVICE = 0 if torch.cuda.is_available() else "cpu"
+print(f"PPEDetector using device: {DEVICE}")
 
 # ── Data structures ───────────────────────────────────────────────────────────
 
@@ -195,7 +197,7 @@ class PPEDetector:
             conf=settings.confidence_threshold,
             iou=settings.iou_threshold,
             verbose=False,
-            device=0
+            device=DEVICE
         )
 
         detections = []

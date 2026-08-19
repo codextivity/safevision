@@ -1,5 +1,6 @@
 # train.py
 
+import torch
 from ultralytics import YOLO
 from pathlib import Path
 from datetime import datetime
@@ -9,6 +10,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from app.config import settings
+
+device=0 if torch.cuda.is_available() else "cpu"
 
 def verify_dataset() -> str:
     """

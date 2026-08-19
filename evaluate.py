@@ -2,6 +2,7 @@
 # Place in project root: D:\Projects\pytorch\safevision\
 # Run after training: python evaluate.py
 
+import torch
 from ultralytics import YOLO
 from pathlib import Path
 import yaml
@@ -9,6 +10,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from app.config import settings
+device=0 if torch.cuda.is_available() else "cpu"
+print(f"Evaluation using device: {device}")
 
 def evaluate():
     """
