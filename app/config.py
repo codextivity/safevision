@@ -17,8 +17,8 @@ class Settings(BaseSettings):
     # ── Model settings ────────────────────────────────────────────────────────
     openai_chat_model: str = "gpt-4o-mini"    # ← add this line
     yolo_base_model: str = "yolo11m.pt"
-    yolo_model_path: str = "models/trained/best.pt"
-    yolo_onnx_path: str = "models/trained/best.onnx"
+    yolo_model_path: str = "models/trained/best_nano.pt"
+    yolo_onnx_path: str = "models/trained/best_nano.onnx"
 
     # ── Training settings ─────────────────────────────────────────────────────
     # imgsz=1280: Hardhat has 42.9% tiny objects — needs high resolution
