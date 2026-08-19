@@ -1,0 +1,20 @@
+# .gitignore
+.env
+__pycache__/
+*.pyc
+*.pyo
+chroma_db/
+data/raw/
+data/violations.db
+data/samples/
+models/trained/
+models/runs/
+runs/
+.venv/
+venv/
+safevision_env/
+*.egg-info/
+.DS_Store
+yolo11m.pt
+yolo26n.pt
+notebooks/sample_annotations.png
