@@ -40,5 +40,5 @@ async def query_safety_agent(request: Request, body: QueryRequest):
     from langchain_core.messages import HumanMessage, AIMessage
 
     chat_history = parse_history(body.history)
-    answer = run_safety_agent(request.app.state.agent, body.message, chat_history)
+    answer = run_safety_agent(request.app.state.agent, body.question, chat_history)
     return QueryResponse(answer=answer, question=body.question)

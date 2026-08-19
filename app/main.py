@@ -21,7 +21,32 @@ async def lifespan(app: FastAPI):
     app.state.detector = None
     app.state.agent = None
 
-    print("API ready — models load on first request")
+    print("API ready — warming up models in background...")
+     # Warmup runs after startup completes
+    # Does not block the health check from passing
+    import asyncio
+    async def warmup():
+        await asyncio.sleep(2)  # wait for server to fully start
+        try:
+            from app.core.detector import PPEDetector
+            from app.core.agent import build_safety_agent
+            from app.config import settings
+            from pathlib import Path
+
+            if Path(settings.yolo_model_path).exists():
+                print("Warming up detector...")
+                app.state.detector = PPEDetector(settings.yolo_model_path)
+                print("Detector ready")
+
+            print("Warming up agent...")
+            app.state.agent = build_safety_agent()
+            print("Agent ready")
+
+        except Exception as e:
+            print(f"Warmup failed: {e} — will load on first request")
+
+    asyncio.create_task(warmup())
+
     yield
     print("Shutting down...")
 
