@@ -7,7 +7,7 @@ chroma_db/
 data/raw/
 data/violations.db
 data/samples/
-models/trained/
+
 models/runs/
 runs/
 .venv/
