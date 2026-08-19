@@ -14,7 +14,9 @@ class HealthResponse(BaseModel):
     timestamp: str
     version: str
     model_loaded: bool
-    database_path: str
+    agent_loaded: bool
+    database_exists: bool
+    memory_mb: float
 
 @router.get("/", include_in_schema=False)
 async def root():
@@ -22,11 +24,21 @@ async def root():
 
 @router.get("/health", response_model=HealthResponse)
 async def health_check(request: Request):
-    """Returns API status and component availability."""
+    # Get current memory usage
+    try:
+        import psutil
+        import os
+        process = psutil.Process(os.getpid())
+        memory_mb = process.memory_info().rss / 1e6
+    except ImportError:
+        memory_mb = 0.0
+
     return HealthResponse(
         status="ok",
         timestamp=datetime.now().isoformat(),
         version="1.0.0",
         model_loaded=request.app.state.detector is not None,
-        database_path=settings.database_path
+        agent_loaded=request.app.state.agent is not None,
+        database_exists=Path(settings.database_path).exists(),
+        memory_mb=round(memory_mb, 1)
     )

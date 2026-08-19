@@ -39,19 +39,21 @@ async def detect_ppe(
     file: UploadFile = File(...),
     return_image: bool = True
 ):
-    """
-    Upload an image for PPE compliance analysis.
+    # Lazy load detector on first request
+    if request.app.state.detector is None:
+        from app.core.detector import PPEDetector
+        from app.config import settings
+        from pathlib import Path
 
-    Returns per-worker compliance status with violations identified.
-    Optionally returns the annotated image as base64.
+        model_path = settings.yolo_model_path
+        if not Path(model_path).exists():
+            raise HTTPException(
+                status_code=503,
+                detail=f"Model not found at {model_path}"
+            )
+        print(f"Loading detector on first request: {model_path}")
+        request.app.state.detector = PPEDetector(model_path)
 
-    The detection pipeline:
-    1. YOLO detects all PPE items and persons
-    2. Spatial association pairs each person with nearby PPE
-    3. Compliance is determined per worker
-    4. Uncertain detections are flagged for GPT-4o verification
-    5. Results are stored in the database
-    """
     detector = request.app.state.detector
 
     if detector is None:

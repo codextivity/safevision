@@ -24,29 +24,21 @@ def parse_history(history: list[dict]) -> list:
             messages.append(AIMessage(content=item["content"]))
     return messages
 
+
 @router.post("", response_model=QueryResponse)
 async def query_safety_agent(request: Request, body: QueryRequest):
-    """
-    Ask the safety agent a question in natural language.
-
-    The agent queries the violation database to answer questions like:
-    - 'What is our compliance rate today?'
-    - 'Which violation type is most common?'
-    - 'How many workers were detected without hardhats?'
-    - 'What safety improvements should we make?'
-
-    Answers are grounded in real detection data from the database.
-    """
-    agent = request.app.state.agent
+    # Lazy load agent on first request
+    if request.app.state.agent is None:
+        from app.core.agent import build_safety_agent
+        print("Building safety agent on first request...")
+        request.app.state.agent = build_safety_agent()
 
     if not body.question.strip():
-        raise HTTPException(
-            status_code=400,
-            detail="Question cannot be empty"
-        )
+        raise HTTPException(status_code=400, detail="Question cannot be empty")
 
     from app.core.agent import run_safety_agent
-    chat_history = parse_history(body.history)
-    answer = run_safety_agent(agent, body.question, chat_history)
+    from langchain_core.messages import HumanMessage, AIMessage
 
+    chat_history = parse_history(body.history)
+    answer = run_safety_agent(request.app.state.agent, body.message, chat_history)
     return QueryResponse(answer=answer, question=body.question)
