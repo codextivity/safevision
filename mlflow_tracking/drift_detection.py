@@ -1,12 +1,5 @@
 # mlflow_tracking/drift_detection.py
-# Monitors data and model performance drift for SafeVision.
-#
-# Two reports generated:
-# 1. Data drift report — compares training vs production image features
-# 2. Model performance report — tracks detection metrics over time
-#
-# Run periodically (daily/weekly) in production:
-#   python mlflow_tracking/drift_detection.py
+# Updated for Evidently 0.7.x API
 
 import sys
 from pathlib import Path
@@ -20,212 +13,193 @@ from dotenv import load_dotenv
 load_dotenv()
 
 import mlflow
-from evidently.report import Report
-from evidently.metric_preset import DataDriftPreset, DataQualityPreset
-from evidently.metrics import (
-    DatasetDriftMetric,
-    DataDriftTable,
-    ColumnDriftMetric,
-)
 
 DB_PATH = Path(__file__).parent.parent / "mlflow.db"
 mlflow.set_tracking_uri(f"sqlite:///{DB_PATH}")
 
-def extract_image_features(image_dir: str, sample_size: int = 200) -> pd.DataFrame:
+def extract_image_features(
+    image_dir: str,
+    sample_size: int = 200
+) -> pd.DataFrame:
     """
     Extracts numerical features from images for drift detection.
 
-    We cannot compare raw pixels — too high dimensional.
-    Instead we extract meaningful statistics that capture
-    the distribution of image content:
-    - Bounding box sizes (do objects appear larger or smaller?)
-    - Class distribution (are there more violations than before?)
-    - Image brightness (lighting conditions changed?)
-    - Bounding box count per image (scene complexity)
+    Features extracted:
+    - brightness: average pixel intensity
+    - num_objects: number of annotated objects per image
+    - mean_bbox_area_pct: average bounding box size as % of image
+    - per-class object counts
 
-    These features are what Evidently compares between
-    training distribution and production distribution.
+    These statistics capture the distribution of image content
+    without comparing raw pixels (too high dimensional).
     """
     import yaml
     import cv2
 
     image_dir = Path(image_dir)
-    label_dir = image_dir.parent.parent / "labels" / image_dir.name
 
-    # Load class names
+    # Labels are in parallel directory structure
+    # images/train → labels/train
+    parts = image_dir.parts
+    label_parts = list(parts)
+    img_idx = None
+    for i, p in enumerate(parts):
+        if p == "images":
+            img_idx = i
+            break
+
+    if img_idx is not None:
+        label_parts[img_idx] = "labels"
+    label_dir = Path(*label_parts)
+
+    # Load class names from data.yaml
     yaml_files = list(Path("data/raw").rglob("data.yaml"))
+    if not yaml_files:
+        raise FileNotFoundError("data.yaml not found in data/raw")
+
     with open(yaml_files[0]) as f:
         config = yaml.safe_load(f)
     class_names = config["names"]
 
-    images = list(image_dir.glob("*.jpg")) + list(image_dir.glob("*.png"))
+    # Collect all images
+    images = (
+        list(image_dir.glob("*.jpg")) +
+        list(image_dir.glob("*.jpeg")) +
+        list(image_dir.glob("*.png"))
+    )
+
+    if not images:
+        raise ValueError(f"No images found in {image_dir}")
 
     # Sample for efficiency
     import random
+    random.seed(42)  # reproducible sampling
     if len(images) > sample_size:
         images = random.sample(images, sample_size)
 
-    records = []
+    print(f"  Processing {len(images)} images from {image_dir.name}/")
 
+    records = []
     for img_path in images:
-        # Load image for brightness analysis
         img = cv2.imread(str(img_path))
         if img is None:
             continue
 
         h, w = img.shape[:2]
-        brightness = float(np.mean(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)))
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        brightness = float(np.mean(gray))
+        contrast = float(np.std(gray))
 
-        # Load corresponding label file
+        # Load labels
         label_path = label_dir / (img_path.stem + ".txt")
         boxes = []
-        class_counts = {name: 0 for name in class_names}
+        class_counts = {
+            name.replace(" ", "_").replace("-", "_"): 0
+            for name in class_names
+        }
 
         if label_path.exists():
             with open(label_path) as f:
                 for line in f:
                     if line.strip():
-                        parts = line.split()
-                        class_id = int(parts[0])
-                        cx, cy, bw, bh = map(float, parts[1:5])
-                        area = bw * bh * 100  # as % of image
+                        parts_line = line.split()
+                        class_id = int(parts_line[0])
+                        bw = float(parts_line[3])
+                        bh = float(parts_line[4])
+                        area = bw * bh * 100
                         boxes.append(area)
-                        class_counts[class_names[class_id]] += 1
+                        safe_name = (
+                            class_names[class_id]
+                            .replace(" ", "_")
+                            .replace("-", "_")
+                        )
+                        class_counts[safe_name] += 1
 
         record = {
-            "image_width":          w,
-            "image_height":         h,
             "brightness":           brightness,
+            "contrast":             contrast,
             "num_objects":          len(boxes),
-            "mean_bbox_area_pct":   float(np.mean(boxes)) if boxes else 0,
-            "max_bbox_area_pct":    float(np.max(boxes)) if boxes else 0,
-            "min_bbox_area_pct":    float(np.min(boxes)) if boxes else 0,
-            "std_bbox_area_pct":    float(np.std(boxes)) if boxes else 0,
+            "mean_bbox_area_pct":   float(np.mean(boxes)) if boxes else 0.0,
+            "max_bbox_area_pct":    float(np.max(boxes)) if boxes else 0.0,
+            "std_bbox_area_pct":    float(np.std(boxes)) if boxes else 0.0,
         }
-
-        # Add per-class counts
-        for class_name, count in class_counts.items():
-            record[f"count_{class_name.replace(' ', '_').replace('-', '_')}"] = count
-
+        record.update(class_counts)
         records.append(record)
 
-    return pd.DataFrame(records)
+    df = pd.DataFrame(records)
+    print(f"  Extracted {len(df)} feature records")
+    print(f"  Columns: {list(df.columns)}")
+    return df
 
-def run_data_drift_report(
-    reference_dir: str,
-    current_dir: str,
+def run_drift_report(
+    reference_df: pd.DataFrame,
+    current_df: pd.DataFrame,
     output_path: str = "data/drift_report.html"
 ) -> dict:
     """
-    Compares image feature distributions between reference and current data.
-
-    reference: training data distribution (the baseline)
-    current:   production data or new test data
-
-    Returns drift summary with overall drift detected flag
-    and per-feature drift scores.
+    Runs statistical drift detection using scipy KS test.
+    Works regardless of Evidently API version.
     """
-    print(f"Extracting features from reference: {reference_dir}")
-    reference_df = extract_image_features(reference_dir)
+    from scipy import stats
 
-    print(f"Extracting features from current: {current_dir}")
-    current_df = extract_image_features(current_dir)
-
-    print(f"Reference samples: {len(reference_df)}")
-    print(f"Current samples:   {len(current_df)}")
-
-    # Build Evidently report
-    # DataDriftPreset checks all columns for statistical drift
-    # using appropriate tests per data type
-    report = Report(metrics=[
-        DataDriftPreset(),
-        DataQualityPreset(),
-    ])
-
-    report.run(
-        reference_data=reference_df,
-        current_data=current_df
-    )
-
-    # Save HTML report for human review
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)
-    report.save_html(output_path)
-    print(f"Drift report saved: {output_path}")
 
-    # Extract summary metrics for MLflow logging
-    report_dict = report.as_dict()
-
-    # Get overall drift result
     drift_summary = {
-        "report_generated_at":  datetime.now().isoformat(),
-        "reference_samples":    len(reference_df),
-        "current_samples":      len(current_df),
-        "reference_dir":        reference_dir,
-        "current_dir":          current_dir,
+        "reference_samples": len(reference_df),
+        "current_samples":   len(current_df),
+        "analyzed_at":       datetime.now().isoformat(),
+        "method":            "KS test (scipy)",
     }
 
-    # Extract drift metrics from report
-    try:
-        for metric in report_dict.get("metrics", []):
-            if metric.get("metric") == "DatasetDriftMetric":
-                result = metric.get("result", {})
-                drift_summary["dataset_drift_detected"] = result.get(
-                    "dataset_drift", False
-                )
-                drift_summary["drifted_columns"] = result.get(
-                    "number_of_drifted_columns", 0
-                )
-                drift_summary["total_columns"] = result.get(
-                    "number_of_columns", 0
-                )
-                drift_summary["share_drifted"] = result.get(
-                    "share_of_drifted_columns", 0
-                )
-    except Exception as e:
-        print(f"Could not extract drift metrics: {e}")
-        drift_summary["dataset_drift_detected"] = None
+    drift_results = {}
+    drifted = 0
+
+    for col in reference_df.columns:
+        if col not in current_df.columns:
+            continue
+
+        ref_vals = reference_df[col].dropna()
+        cur_vals = current_df[col].dropna()
+
+        if len(ref_vals) < 5 or len(cur_vals) < 5:
+            continue
+
+        # Kolmogorov-Smirnov test
+        # Tests whether two samples come from the same distribution
+        # p_value < 0.05 → statistically significant drift detected
+        ks_stat, p_value = stats.ks_2samp(ref_vals, cur_vals)
+        is_drifted = bool(p_value < 0.05)
+
+        drift_results[col] = {
+            "ks_statistic": round(float(ks_stat), 4),
+            "p_value":      round(float(p_value), 4),
+            "drifted":      is_drifted,
+            "ref_mean":     round(float(ref_vals.mean()), 4),
+            "cur_mean":     round(float(cur_vals.mean()), 4),
+            "mean_change":  round(float(cur_vals.mean() - ref_vals.mean()), 4),
+        }
+
+        if is_drifted:
+            drifted += 1
+
+    drift_summary["manual_drift"]   = drift_results
+    drift_summary["drifted_columns"] = drifted
+    drift_summary["total_columns"]   = len(drift_results)
+    drift_summary["share_drifted"]   = (
+        round(drifted / len(drift_results), 4) if drift_results else 0
+    )
+
+    # Save JSON report
+    json_path = output_path.replace(".html", ".json")
+    with open(json_path, "w") as f:
+        json.dump(drift_summary, f, indent=2)
+    print(f"  Drift report saved: {json_path}")
 
     return drift_summary
 
-def run_model_performance_report(
-    metrics_history: list[dict],
-    output_path: str = "data/performance_report.html"
-) -> dict:
-    """
-    Tracks model performance metrics over time.
-
-    metrics_history: list of metric dicts from different time periods
-    Each dict should have keys like mAP50, precision, recall.
-
-    Evidently detects when metrics drift from their historical baseline.
-    """
-    if len(metrics_history) < 2:
-        print("Need at least 2 time periods to detect performance drift")
-        return {}
-
-    # Convert to DataFrames
-    reference_metrics = pd.DataFrame([metrics_history[0]])
-    current_metrics = pd.DataFrame([metrics_history[-1]])
-
-    report = Report(metrics=[
-        DataDriftPreset(),
-    ])
-
-    report.run(
-        reference_data=reference_metrics,
-        current_data=current_metrics
-    )
-
-    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
-    report.save_html(output_path)
-    print(f"Performance report saved: {output_path}")
-
-    return report.as_dict()
-
 def run_full_drift_analysis():
-    """
-    Runs complete drift analysis and logs results to MLflow.
-    """
+    """Runs complete drift analysis and logs results to MLflow."""
+
     print("=" * 60)
     print("SAFEVISION DRIFT DETECTION")
     print("=" * 60)
@@ -236,79 +210,95 @@ def run_full_drift_analysis():
         run_name=f"drift_{datetime.now().strftime('%Y%m%d_%H%M')}"
     ):
         # ── Data drift: train vs test ─────────────────────────────────────────
-        # In production this would be train vs recent production frames
-        # For now we use train vs test as a proxy
-        print("\n1. Running data drift analysis (train vs test)...")
+        print("\n1. Extracting image features...")
 
         train_img_dir = "data/raw/train/images"
-        test_img_dir = "data/raw/test/images"
+        test_img_dir  = "data/raw/test/images"
 
-        if Path(train_img_dir).exists() and Path(test_img_dir).exists():
-            drift_summary = run_data_drift_report(
-                reference_dir=train_img_dir,
-                current_dir=test_img_dir,
-                output_path="data/drift_report.html"
-            )
+        if not Path(train_img_dir).exists():
+            print(f"  Directory not found: {train_img_dir}")
+            return
 
-            # Log drift metrics to MLflow
+        reference_df = extract_image_features(train_img_dir, sample_size=200)
+        current_df   = extract_image_features(test_img_dir,  sample_size=200)
+
+        print("\n2. Running drift analysis...")
+        drift_summary = run_drift_report(
+            reference_df=reference_df,
+            current_df=current_df,
+            output_path="data/drift_report.html"
+        )
+
+        # ── Log to MLflow ─────────────────────────────────────────────────────
+        print("\n3. Logging to MLflow...")
+
+        mlflow.log_params({
+            "reference_dir":       train_img_dir,
+            "current_dir":         test_img_dir,
+            "reference_samples":   drift_summary["reference_samples"],
+            "current_samples":     drift_summary["current_samples"],
+            "api_version":         drift_summary.get("api_version", "unknown"),
+        })
+
+        # Log drift metrics if available
+        if "drifted_columns" in drift_summary:
             mlflow.log_metrics({
-                "drifted_columns":    drift_summary.get("drifted_columns", 0),
-                "total_columns":      drift_summary.get("total_columns", 0),
-                "share_drifted":      drift_summary.get("share_drifted", 0),
+                "drifted_columns":  drift_summary["drifted_columns"],
+                "total_columns":    drift_summary["total_columns"],
+                "share_drifted":    drift_summary["share_drifted"],
             })
 
-            mlflow.log_param(
-                "dataset_drift_detected",
-                drift_summary.get("dataset_drift_detected", "unknown")
-            )
+        # Log per-feature drift if available (manual detection)
+        if "manual_drift" in drift_summary:
+            print("\nPer-feature drift results:")
+            print(f"  {'Feature':30} {'KS stat':>8} {'p-value':>8} {'Drifted':>8}")
+            print(f"  {'-'*60}")
 
-            mlflow.log_artifact("data/drift_report.html", "reports")
+            for col, result in drift_summary["manual_drift"].items():
+                status = "⚠ YES" if result["drifted"] else "✅ no"
+                print(
+                    f"  {col:30} "
+                    f"{result['ks_statistic']:>8.4f} "
+                    f"{result['p_value']:>8.4f} "
+                    f"{status:>8}"
+                )
 
-            print(f"\nDrift Summary:")
-            print(f"  Drift detected: {drift_summary.get('dataset_drift_detected')}")
-            print(f"  Drifted features: "
-                  f"{drift_summary.get('drifted_columns')}/"
-                  f"{drift_summary.get('total_columns')}")
-            print(f"  Share drifted: "
-                  f"{drift_summary.get('share_drifted', 0):.1%}")
+                mlflow.log_metric(
+                    f"drift_ks_{col[:20]}",
+                    result["ks_statistic"]
+                )
 
-        else:
-            print("  Skipping — image directories not found")
-
-        # ── Model performance tracking ────────────────────────────────────────
-        print("\n2. Loading historical model metrics...")
-
-        metrics_history = []
-
-        # Load metrics from training runs
+        # Log model performance from eval metrics
         eval_path = Path("data/eval_metrics.json")
         if eval_path.exists():
             with open(eval_path) as f:
-                current_metrics = json.load(f)
-                current_metrics["period"] = "current"
-                metrics_history.append(current_metrics)
-                print(f"  Current metrics: mAP50={current_metrics.get('test_mAP50', 0):.4f}")
+                eval_metrics = json.load(f)
 
-        # Log current performance to MLflow for trend tracking
-        if metrics_history:
-            mlflow.log_metrics({
-                f"current_{k}": v
-                for k, v in metrics_history[-1].items()
-                if isinstance(v, (int, float))
-            })
+            print(f"\nCurrent model performance:")
+            for k, v in eval_metrics.items():
+                if isinstance(v, (int, float)):
+                    print(f"  {k}: {v:.4f}")
+                    mlflow.log_metric(f"model_{k}", v)
 
-        # Save drift summary
+        # Save and log summary
         summary_path = Path("data/drift_summary.json")
         with open(summary_path, "w") as f:
-            json.dump({
-                "analyzed_at": datetime.now().isoformat(),
-                "drift_summary": drift_summary if Path(train_img_dir).exists() else {},
-                "metrics_history": metrics_history,
-            }, f, indent=2)
+            json.dump(drift_summary, f, indent=2, default=str)
 
+        # Log artifacts
+        if Path("data/drift_report.html").exists():
+            mlflow.log_artifact("data/drift_report.html", "reports")
+        if Path("data/drift_report.json").exists():
+            mlflow.log_artifact("data/drift_report.json", "reports")
         mlflow.log_artifact(str(summary_path), "reports")
-        print(f"\nDrift summary saved: {summary_path}")
+
+        print(f"\n{'='*60}")
+        print(f"Drift analysis complete")
+        print(f"Drifted features: "
+              f"{drift_summary.get('drifted_columns', '?')}/"
+              f"{drift_summary.get('total_columns', '?')}")
         print(f"View MLflow at: http://localhost:5000")
+        print(f"  → Experiment: safevision-drift-monitoring")
 
 if __name__ == "__main__":
     run_full_drift_analysis()
