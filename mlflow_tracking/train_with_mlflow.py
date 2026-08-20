@@ -156,6 +156,19 @@ def train_with_epoch_logging(
             verbose=False,  # reduce console noise — metrics go to MLflow
         )
 
+        # print(f"\nDEBUG: Looking for best model...")
+        # print(f"run_name_yolo = '{run_name_yolo}'")
+        # best = Path("models") / run_name_yolo / "weights" / "best.pt"
+        # print(f"Expected path: {best}")
+        # print(f"Exists: {best.exists()}")
+
+        # # Show what actually exists in models/
+        # import glob
+        # all_pts = glob.glob("models/**/*.pt", recursive=True)
+        # print(f"All .pt files found:")
+        # for f in all_pts:
+        #     print(f"  {f}")
+
         # ── Log final summary metrics ─────────────────────────────────────────
         map50 = results.results_dict.get("metrics/mAP50(B)", 0)
         map50_95 = results.results_dict.get("metrics/mAP50-95(B)", 0)
@@ -186,16 +199,69 @@ def train_with_epoch_logging(
 
         print(f"Metrics saved to data/metrics.json")
 
-        # ── Save and log best model ───────────────────────────────────────────
-        best = Path("models") / run_name_yolo / "weights" / "best.pt"
-        if best.exists():
-            # Log to MLflow artifacts
+        # ── Save and log best model ───────────────────────────────────────────────────
+        import glob
+
+        print("\nSearching for best.pt...")
+
+        # Build the exact path from the Ultralytics log output
+        # Ultralytics saves to: runs/detect/{project}/{name}/weights/best.pt
+        # Our project="models", name=run_name_yolo
+        # So full path = runs/detect/models/{run_name_yolo}/weights/best.pt
+
+        exact_path = Path("runs") / "detect" / "models" / run_name_yolo / "weights" / "best.pt"
+        print(f"Checking exact path: {exact_path}")
+        print(f"Exists: {exact_path.exists()}")
+
+        # Also try alternative locations
+        alternative_paths = [
+            Path("models") / run_name_yolo / "weights" / "best.pt",
+            Path("runs") / "detect" / run_name_yolo / "weights" / "best.pt",
+        ]
+
+        best = None
+        if exact_path.exists():
+            best = exact_path
+        else:
+            for alt in alternative_paths:
+                if alt.exists():
+                    best = alt
+                    print(f"Found at alternative path: {alt}")
+                    break
+
+        if best is None:
+            # Exhaustive search as last resort
+            all_pts = glob.glob("**/best.pt", recursive=True)
+            print(f"Exhaustive search found {len(all_pts)} best.pt files:")
+            for f in all_pts:
+                print(f"  {f} ({Path(f).stat().st_size/1e6:.1f} MB)")
+
+            if all_pts:
+                # Take most recently modified
+                all_pts.sort(
+                    key=lambda x: Path(x).stat().st_mtime,
+                    reverse=True
+                )
+                best = Path(all_pts[0])
+                print(f"Using most recent: {best}")
+
+        if best and best.exists():
+            size_mb = best.stat().st_size / 1e6
+            print(f"Model found: {best} ({size_mb:.1f} MB)")
+
+            # Log to MLflow
             mlflow.log_artifact(str(best), artifact_path="model")
 
-            # Copy to standard location
+            # Copy to DVC output location
             Path("models/trained").mkdir(parents=True, exist_ok=True)
-            shutil.copy(best, settings.yolo_model_path)
-            print(f"Best model saved: {settings.yolo_model_path}")
+            dvc_path = Path("models/trained/best_nano.pt")
+            shutil.copy(str(best), str(dvc_path))
+
+            print(f"Copied to: {dvc_path} ({dvc_path.stat().st_size/1e6:.1f} MB)")
+
+        else:
+            print("ERROR: best.pt not found")
+            print("Manual fix: copy the model file to models/trained/best_nano.pt")
 
         mlflow.set_tags({
             "deployment_ready": str(map50 > 0.70),
@@ -212,7 +278,7 @@ def train_with_epoch_logging(
 if __name__ == "__main__":
     train_with_epoch_logging(
         model_name="yolo11n.pt",
-        epochs=30,          # shorter run to test logging
+        epochs=50,          # shorter run to test logging
         batch=32,
         imgsz=640,
     )

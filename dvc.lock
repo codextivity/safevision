@@ -31,21 +31,21 @@ stages:
       nfiles: 13500
     - path: mlflow_tracking/train_with_mlflow.py
       hash: md5
-      md5: ecd21bb40940fd9e2c8efd4e965261e3
-      size: 8374
+      md5: 75a3d19c94761bf40e9518f20124b78c
+      size: 10887
     - path: params.yaml
       hash: md5
-      md5: ac7484d291fc05fde84fe9ae5646f543
+      md5: 1c95d90e9a474ff70483817cdf94c2e8
       size: 520
     outs:
     - path: data/metrics.json
       hash: md5
-      md5: 3d834671f9a0ab0d181704eadb782781
+      md5: 33304e941151c3194889351c01619db9
       size: 213
     - path: models/trained/best_nano.pt
       hash: md5
-      md5: 2ece156f7ce9017db61bf0812f859ddb
-      size: 5471194
+      md5: b48ee591f8fbca6b4a6d2f5e07d1f3d4
+      size: 5473754
   evaluate:
     cmd: python evaluate.py
     deps:
@@ -60,12 +60,12 @@ stages:
       size: 6453
     - path: models/trained/best_nano.pt
       hash: md5
-      md5: 2ece156f7ce9017db61bf0812f859ddb
-      size: 5471194
+      md5: b48ee591f8fbca6b4a6d2f5e07d1f3d4
+      size: 5473754
     outs:
     - path: data/eval_metrics.json
       hash: md5
-      md5: 337cc5a63cd4ffbc0d2a27aca677eabb
+      md5: 8ca53de5f3620f6e4c49e69e0e852908
       size: 396
   export:
     cmd: python export_onnx.py
@@ -76,10 +76,10 @@ stages:
       size: 2547
     - path: models/trained/best_nano.pt
       hash: md5
-      md5: 2ece156f7ce9017db61bf0812f859ddb
-      size: 5471194
+      md5: b48ee591f8fbca6b4a6d2f5e07d1f3d4
+      size: 5473754
     outs:
     - path: models/deployed/best_nano.onnx
       hash: md5
-      md5: da3f409196b1099142da31b3582b9aee
+      md5: ad4883fcb79fb5d7998716effed3ec26
       size: 10607265

@@ -1,11 +1,11 @@
 {
-  "test_mAP50": 0.6018956144898068,
-  "test_mAP50_95": 0.432978113933383,
-  "test_precision": 0.7388628343527953,
-  "test_recall": 0.6833667692844555,
-  "test_mAP50_Hardhat": 0.7215653721648987,
-  "test_mAP50_NO_Hardhat": 0.21578495294225264,
-  "test_mAP50_Safety_Vest": 0.932221807011349,
-  "test_mAP50_NO_Safety_Vest": 0.3894077173101565,
-  "test_mAP50_Person": 0.7504982230203772
+  "test_mAP50": 0.5944297006894173,
+  "test_mAP50_95": 0.43944388825036557,
+  "test_precision": 0.7836902667686007,
+  "test_recall": 0.640357579348541,
+  "test_mAP50_Hardhat": 0.7309067386080141,
+  "test_mAP50_NO_Hardhat": 0.20072252364342244,
+  "test_mAP50_Safety_Vest": 0.9328549929540605,
+  "test_mAP50_NO_Safety_Vest": 0.356990565448357,
+  "test_mAP50_Person": 0.750673682793232
 }
