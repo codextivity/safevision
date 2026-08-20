@@ -1,0 +1,26 @@
+# params.yaml
+# Central parameter file — DVC tracks changes to these.
+# If you change imgsz here, DVC knows the training stage is outdated
+# and needs to re-run.
+
+model:
+  architecture: yolo11n.pt
+  imgsz: 640
+  epochs: 50
+  batch_size: 32
+  optimizer: AdamW
+  lr0: 0.001
+  lrf: 0.01
+  cls_loss_weight: 1.5
+  patience: 15
+
+data:
+  train_images: 5646
+  val_images: 775
+  test_images: 326
+  num_classes: 5
+
+deployment:
+  confidence_threshold: 0.25
+  verification_threshold: 0.70
+  onnx_opset: 12

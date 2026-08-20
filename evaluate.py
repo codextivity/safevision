@@ -1,7 +1,7 @@
 # evaluate.py
 # Place in project root: D:\Projects\pytorch\safevision\
 # Run after training: python evaluate.py
-
+import json
 import torch
 from ultralytics import YOLO
 from pathlib import Path
@@ -12,6 +12,9 @@ load_dotenv()
 from app.config import settings
 device=0 if torch.cuda.is_available() else "cpu"
 print(f"Evaluation using device: {device}")
+
+print(f"Looking for model at: {settings.yolo_model_path}")
+print(f"File exists: {Path(settings.yolo_model_path).exists()}")
 
 def evaluate():
     """
@@ -143,6 +146,26 @@ def evaluate():
     print(f"   ({no_hardhat_ap:.0%} NO-Hardhat, {no_vest_ap:.0%} NO-Safety Vest).")
     print(f"   Low-confidence violation detections are routed to GPT-4o")
     print(f"   vision verification before storing in the database.'")
+
+    eval_output = {
+    "test_mAP50":        map50,
+    "test_mAP50_95":     map50_95,
+    "test_precision":    precision,
+    "test_recall":       recall,
+    "test_mAP50_Hardhat":      class_map50s.get("Hardhat", 0),
+    "test_mAP50_NO_Hardhat":   class_map50s.get("NO-Hardhat", 0),
+    "test_mAP50_Safety_Vest":  class_map50s.get("Safety Vest", 0),
+    "test_mAP50_NO_Safety_Vest": class_map50s.get("NO-Safety Vest", 0),
+    "test_mAP50_Person":       class_map50s.get("Person", 0),
+    }
+
+    Path("data").mkdir(exist_ok=True)
+    with open("data/eval_metrics.json", "w") as f:
+        json.dump(eval_output, f, indent=2)
+
+    print(f"Eval metrics saved to data/eval_metrics.json")
+
+
 
     return results
 

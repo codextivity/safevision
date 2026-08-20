@@ -1,0 +1,48 @@
+# dvc.yaml
+
+stages:
+
+  data_validation:
+    cmd: python mlflow_tracking/validate_data.py
+    deps:
+      - data/raw
+      - mlflow_tracking/validate_data.py
+    outs:
+      - data/validation_report.json
+
+  train:
+    cmd: python mlflow_tracking/train_with_mlflow.py
+    deps:
+      - data/raw
+      - mlflow_tracking/train_with_mlflow.py
+      - app/config.py
+      - params.yaml
+    outs:
+      # Track only the weights folder, not the entire models/trained/
+      # This avoids overlap with the export stage
+      - models/trained/best_nano.pt:
+          cache: true
+    metrics:
+      - data/metrics.json:
+          cache: false
+
+  evaluate:
+    cmd: python evaluate.py
+    deps:
+      - models/trained/best_nano.pt
+      - data/raw
+      - evaluate.py
+    metrics:
+      - data/eval_metrics.json:
+          cache: false
+
+  export:
+    cmd: python export_onnx.py
+    deps:
+      # Depends on the PT model from train stage
+      - models/trained/best_nano.pt
+      - export_onnx.py
+    outs:
+      # Outputs to a separate file — no overlap with train stage
+      - models/deployed/best_nano.onnx:
+          cache: true

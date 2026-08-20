@@ -1,0 +1,8 @@
+{
+  "val_mAP50": 0.7511393403729744,
+  "val_mAP50_95": 0.5035647629855554,
+  "val_precision": 0.8040567691913576,
+  "val_recall": 0.6917820293346791,
+  "model_size_mb": 5.5,
+  "training_time_hours": 0.254
+}

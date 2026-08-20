@@ -1,14 +1,18 @@
-# export_onnx.py — place in project root
+# export_onnx.py — full fixed version
 
 import os
 from pathlib import Path
 from ultralytics import YOLO
 
 def export_onnx():
-    model_path = "models/trained/best.pt"
-    onnx_path = "models/trained/best.onnx"
+    model_path = "models/trained/best_nano.pt"
 
-    # Verify source model exists and is valid
+    # Destination — where DVC expects the ONNX file
+    output_dir = Path("models/deployed")
+    output_dir.mkdir(parents=True, exist_ok=True)
+    output_path = output_dir / "best_nano.onnx"
+
+    # Verify source model exists
     if not Path(model_path).exists():
         raise FileNotFoundError(f"Model not found: {model_path}")
 
@@ -17,65 +21,60 @@ def export_onnx():
 
     if size_mb < 1:
         raise ValueError(
-            f"Source model is too small ({size_mb:.1f} MB) — "
-            f"may be a Git LFS pointer file, not the actual weights. "
-            f"Run: git lfs pull"
+            f"Source model too small ({size_mb:.1f} MB) — "
+            f"may be a Git LFS pointer. Run: git lfs pull"
         )
 
-    # Delete existing ONNX if corrupted
-    if Path(onnx_path).exists():
-        existing_size = Path(onnx_path).stat().st_size / 1e6
-        print(f"Removing existing ONNX ({existing_size:.1f} MB)...")
-        os.remove(onnx_path)
+    # Delete existing ONNX files to avoid conflicts
+    # Ultralytics exports to same directory as the .pt file by default
+    default_onnx = Path("models/trained/best_nano.onnx")
+    if default_onnx.exists():
+        print(f"Removing existing ONNX: {default_onnx}")
+        default_onnx.unlink()
+
+    if output_path.exists():
+        print(f"Removing existing ONNX: {output_path}")
+        output_path.unlink()
 
     print("Loading model...")
     model = YOLO(model_path)
 
     print("Exporting to ONNX...")
-    # Export returns the path to the exported file
-    exported_path = model.export(
+    exported = model.export(
         format="onnx",
         imgsz=640,
         simplify=True,
         dynamic=False,
-        opset=12,      # opset 12 is more widely compatible than 17
+        opset=12,
     )
 
-    print(f"Export returned: {exported_path}")
+    # exported is a Path object from Ultralytics
+    exported_path = Path(exported)
+    print(f"Ultralytics saved ONNX to: {exported_path}")
+    print(f"ONNX exists: {exported_path.exists()}")
 
-    # Verify the exported file
-    if exported_path and Path(exported_path).exists():
-        onnx_size = Path(exported_path).stat().st_size / 1e6
-        print(f"ONNX file size: {onnx_size:.1f} MB")
+    if not exported_path.exists():
+        raise RuntimeError(f"Export failed — file not found: {exported_path}")
 
-        if onnx_size < 1:
-            raise ValueError(
-                f"ONNX file is too small ({onnx_size:.1f} MB) — export failed"
-            )
+    # Copy to DVC output location
+    import shutil
+    shutil.copy2(str(exported_path), str(output_path))
+    print(f"Copied to DVC output: {output_path}")
 
-        # Move to correct location if needed
-        if str(exported_path) != onnx_path:
-            import shutil
-            shutil.move(str(exported_path), onnx_path)
-            print(f"Moved to: {onnx_path}")
+    # Remove the Ultralytics default location copy
+    if exported_path != output_path and exported_path.exists():
+        exported_path.unlink()
+        print(f"Removed intermediate file: {exported_path}")
 
-        print(f"✅ ONNX export successful: {onnx_path}")
+    # Verify final output
+    final_size = output_path.stat().st_size / 1e6
+    print(f"Final ONNX: {output_path} ({final_size:.1f} MB)")
 
-    else:
-        raise RuntimeError("Export failed — no output file produced")
+    if final_size < 1:
+        raise ValueError(f"ONNX file too small: {final_size:.1f} MB")
 
-    # Verify it loads correctly
-    print("Verifying ONNX model loads...")
-    try:
-        import onnxruntime as ort
-        session = ort.InferenceSession(onnx_path)
-        inputs = session.get_inputs()
-        print(f"✅ ONNX verified — input shape: {inputs[0].shape}")
-    except ImportError:
-        print("onnxruntime not installed — skipping verification")
-        print("Install with: pip install onnxruntime")
-    except Exception as e:
-        print(f"⚠ ONNX verification failed: {e}")
+    print("✅ ONNX export successful")
+    return str(output_path)
 
 if __name__ == "__main__":
     export_onnx()

@@ -1,0 +1,24 @@
+{
+  "validated_at": "2026-08-20T10:56:22.691822",
+  "data_root": "data\\raw",
+  "status": "passed",
+  "issues": [],
+  "stats": {
+    "num_classes": 5,
+    "class_names": [
+      "Hardhat",
+      "NO-Hardhat",
+      "NO-Safety Vest",
+      "Person",
+      "Safety Vest"
+    ],
+    "train_images": 5646,
+    "train_labels": 5646,
+    "valid_images": 775,
+    "valid_labels": 775,
+    "test_images": 326,
+    "test_labels": 326,
+    "total_images": 6747,
+    "total_labels": 6747
+  }
+}

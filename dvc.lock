@@ -1,0 +1,85 @@
+schema: '2.0'
+stages:
+  data_validation:
+    cmd: python mlflow_tracking/validate_data.py
+    deps:
+    - path: data/raw
+      hash: md5
+      md5: 46ae45bf8b75166de423381db7699bb2.dir
+      size: 406099737
+      nfiles: 13500
+    - path: mlflow_tracking/validate_data.py
+      hash: md5
+      md5: b0cfb6c43e886efafed4e73df4a0dd7c
+      size: 3202
+    outs:
+    - path: data/validation_report.json
+      hash: md5
+      md5: 52d664301ddaf1ca438ab59581ff721b
+      size: 505
+  train:
+    cmd: python mlflow_tracking/train_with_mlflow.py
+    deps:
+    - path: app/config.py
+      hash: md5
+      md5: 7ecf95cb9a84fc58272d54b67fb65de8
+      size: 3654
+    - path: data/raw
+      hash: md5
+      md5: 46ae45bf8b75166de423381db7699bb2.dir
+      size: 406099737
+      nfiles: 13500
+    - path: mlflow_tracking/train_with_mlflow.py
+      hash: md5
+      md5: ecd21bb40940fd9e2c8efd4e965261e3
+      size: 8374
+    - path: params.yaml
+      hash: md5
+      md5: ac7484d291fc05fde84fe9ae5646f543
+      size: 520
+    outs:
+    - path: data/metrics.json
+      hash: md5
+      md5: 3d834671f9a0ab0d181704eadb782781
+      size: 213
+    - path: models/trained/best_nano.pt
+      hash: md5
+      md5: 2ece156f7ce9017db61bf0812f859ddb
+      size: 5471194
+  evaluate:
+    cmd: python evaluate.py
+    deps:
+    - path: data/raw
+      hash: md5
+      md5: 46ae45bf8b75166de423381db7699bb2.dir
+      size: 406099737
+      nfiles: 13500
+    - path: evaluate.py
+      hash: md5
+      md5: 1631b38255b3c87eed2b20cfc337ecf3
+      size: 6453
+    - path: models/trained/best_nano.pt
+      hash: md5
+      md5: 2ece156f7ce9017db61bf0812f859ddb
+      size: 5471194
+    outs:
+    - path: data/eval_metrics.json
+      hash: md5
+      md5: 337cc5a63cd4ffbc0d2a27aca677eabb
+      size: 396
+  export:
+    cmd: python export_onnx.py
+    deps:
+    - path: export_onnx.py
+      hash: md5
+      md5: 2287f70a1ab8f7a941bce248ee1518f4
+      size: 2547
+    - path: models/trained/best_nano.pt
+      hash: md5
+      md5: 2ece156f7ce9017db61bf0812f859ddb
+      size: 5471194
+    outs:
+    - path: models/deployed/best_nano.onnx
+      hash: md5
+      md5: da3f409196b1099142da31b3582b9aee
+      size: 10607265
