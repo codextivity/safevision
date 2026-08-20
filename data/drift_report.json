@@ -1,7 +1,7 @@
 {
   "reference_samples": 200,
   "current_samples": 200,
-  "analyzed_at": "2026-08-20T12:21:56.696035",
+  "analyzed_at": "2026-08-20T12:26:07.590235",
   "method": "KS test (scipy)",
   "manual_drift": {
     "brightness": {

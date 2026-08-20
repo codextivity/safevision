@@ -46,3 +46,17 @@ stages:
       # Outputs to a separate file — no overlap with train stage
       - models/deployed/best_nano.onnx:
           cache: true
+
+  # dvc.yaml — add monitor stage at the end
+
+  monitor:
+    cmd: python mlflow_tracking/drift_detection.py
+    deps:
+      - data/raw
+      - data/eval_metrics.json
+      - mlflow_tracking/drift_detection.py
+    outs:
+      - data/drift_report.json:
+          cache: false
+      - data/drift_summary.json:
+          cache: false

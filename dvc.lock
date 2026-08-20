@@ -83,3 +83,28 @@ stages:
       hash: md5
       md5: ad4883fcb79fb5d7998716effed3ec26
       size: 10607265
+  monitor:
+    cmd: python mlflow_tracking/drift_detection.py
+    deps:
+    - path: data/eval_metrics.json
+      hash: md5
+      md5: 8ca53de5f3620f6e4c49e69e0e852908
+      size: 396
+    - path: data/raw
+      hash: md5
+      md5: 46ae45bf8b75166de423381db7699bb2.dir
+      size: 406099737
+      nfiles: 13500
+    - path: mlflow_tracking/drift_detection.py
+      hash: md5
+      md5: 883d0ac60c6019fcd6c7c3bb67fb40ae
+      size: 10654
+    outs:
+    - path: data/drift_report.json
+      hash: md5
+      md5: 4920777ea99c2ff988b3ad730f99d665
+      size: 2354
+    - path: data/drift_summary.json
+      hash: md5
+      md5: 4920777ea99c2ff988b3ad730f99d665
+      size: 2354
